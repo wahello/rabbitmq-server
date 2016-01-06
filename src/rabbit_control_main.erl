@@ -72,6 +72,8 @@
          {clear_policy, [?VHOST_DEF]},
          {list_policies, [?VHOST_DEF]},
 
+         {set_vhost_limits, [?VHOST_DEF, ?MAX_CONNECTIONS_DEF]},
+
          {list_queues, [?VHOST_DEF]},
          {list_exchanges, [?VHOST_DEF]},
          {list_bindings, [?VHOST_DEF]},
@@ -511,6 +513,12 @@ action(clear_policy, Node, [Key], Opts, Inform) ->
     VHostArg = list_to_binary(proplists:get_value(?VHOST_OPT, Opts)),
     Inform("Clearing policy ~p", [Key]),
     rpc_call(Node, rabbit_policy, delete, [VHostArg, list_to_binary(Key)]);
+
+action(set_vhost_limits, _Node, [], Opts, Inform) ->
+    Msg = "Setting vhost limits for vhost ~p",
+    VHostArg = list_to_binary(proplists:get_value(?VHOST_OPT, Opts)),
+    Inform(Msg, [VHostArg]),
+    ok;
 
 action(report, Node, _Args, _Opts, Inform) ->
     Inform("Reporting server status on ~p~n~n", [erlang:universaltime()]),

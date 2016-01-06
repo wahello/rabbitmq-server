@@ -30,6 +30,7 @@
 -define(OFFLINE_OPT, "--offline").
 -define(ONLINE_OPT, "--online").
 
+-define(MAX_CONNECTIONS_OPT, "--max-connections").
 
 -define(NODE_DEF(Node), {?NODE_OPT, {option, Node}}).
 -define(QUIET_DEF, {?QUIET_OPT, flag}).
@@ -46,6 +47,8 @@
 -define(RAM_DEF, {?RAM_OPT, flag}).
 -define(OFFLINE_DEF, {?OFFLINE_OPT, flag}).
 -define(ONLINE_DEF, {?ONLINE_OPT, flag}).
+
+-define(MAX_CONNECTIONS_DEF, {?MAX_CONNECTIONS_OPT, {option, "0"}}).
 
 -define(RPC_TIMEOUT, infinity).
 
