@@ -21,7 +21,7 @@
 %%----------------------------------------------------------------------------
 
 -export([add/1, delete/1, exists/1, list/0, with/2, assert/1, update/2,
-         set_limits/2]).
+         set_limits/2, limits_of/1]).
 -export([info/1, info/2, info_all/0, info_all/1, info_all/2, info_all/3]).
 
 -ifdef(use_specs).
@@ -156,13 +156,13 @@ update(VHostPath, Fun) ->
 
 limits_of(VHostPath) when is_binary(VHostPath) ->
     assert(VHostPath),
-    case mnesia:read({rabbit_vhost, VHostPath}) of
+    case mnesia:dirty_read({rabbit_vhost, VHostPath}) of
         [] ->
             mnesia:abort({no_such_vhost, VHostPath});
-        [V = #vhost{limits = Limits}] ->
+        [#vhost{limits = Limits}] ->
             Limits
     end;
-limits_of(VHost = #vhost{virtual_host = Name}) ->
+limits_of(#vhost{virtual_host = Name}) ->
     limits_of(Name).
 
 set_limits(VHost = #vhost{}, undefined) ->
