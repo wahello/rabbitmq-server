@@ -72,7 +72,7 @@
          {clear_policy, [?VHOST_DEF]},
          {list_policies, [?VHOST_DEF]},
 
-         {set_vhost_limits, [?VHOST_DEF, ?MAX_CONNECTIONS_DEF]},
+         {set_vhost_limits, [?VHOST_DEF]},
 
          {list_queues, [?VHOST_DEF]},
          {list_exchanges, [?VHOST_DEF]},
@@ -514,10 +514,11 @@ action(clear_policy, Node, [Key], Opts, Inform) ->
     Inform("Clearing policy ~p", [Key]),
     rpc_call(Node, rabbit_policy, delete, [VHostArg, list_to_binary(Key)]);
 
-action(set_vhost_limits, _Node, [], Opts, Inform) ->
+action(set_vhost_limits, Node, [Defn], Opts, Inform) ->
     Msg = "Setting vhost limits for vhost ~p",
     VHostArg = list_to_binary(proplists:get_value(?VHOST_OPT, Opts)),
     Inform(Msg, [VHostArg]),
+    rpc_call(Node, rabbit_vhost_limit, parse_set, [VHostArg, Defn]),
     ok;
 
 action(report, Node, _Args, _Opts, Inform) ->
