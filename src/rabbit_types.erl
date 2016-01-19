@@ -27,7 +27,8 @@
               vhost/0, ctag/0, amqp_error/0, r/1, r2/2, r3/3, listener/0,
               binding/0, binding_source/0, binding_destination/0,
               amqqueue/0, exchange/0,
-              connection/0, protocol/0, auth_user/0, user/0, internal_user/0,
+              connection/0, connection_name/0, tracked_connection/0,
+              protocol/0, auth_user/0, user/0, internal_user/0,
               username/0, password/0, password_hash/0,
               ok/1, error/1, ok_or_error/1, ok_or_error2/2, ok_pid_or_error/0,
               channel_exit/0, connection_exit/0, mfargs/0, proc_name/0,
@@ -128,7 +129,19 @@
                   auto_delete :: boolean(),
                   arguments   :: rabbit_framing:amqp_table()}).
 
+-type(connection_name() :: binary()).
+
+%% used e.g. by rabbit_networking
 -type(connection() :: pid()).
+
+%% used e.g. by rabbit_connection_tracking
+-type(tracked_connection() ::
+        #tracked_connection{vhost     :: vhost(),
+                            name      :: connection_name(),
+                            pid       :: pid(),
+                            protocol  :: protocol(),
+                            peer_host :: rabbit_networking:hostname(),
+                            peer_port :: rabbit_networking:ip_port()}).
 
 -type(protocol() :: rabbit_framing:protocol()).
 

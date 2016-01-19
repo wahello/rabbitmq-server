@@ -97,8 +97,9 @@
 
 tracked_connection() ->
     create(rabbit_tracked_connection, [{record_name, tracked_connection},
-                                       {attributes, [vhost, name, pid, peer_host,
-                                                     peer_port, connected_at]}]).
+                                       {attributes, [vhost, name, pid, protocol,
+                                                     peer_host, peer_port,
+                                                     connected_at]}]).
 
 %% replaces vhost.dummy (used to avoid having a single-field record
 %% which Mnesia doesn't like) with vhost.limits (which is actually
