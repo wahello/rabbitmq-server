@@ -55,7 +55,7 @@
 init([]) ->
     {ok, []}.
 
-handle_event(#event{type = connection_created, props = Details}, State) ->
+handle_event(#event{type = connection_created, props = _Details}, State) ->
     %% [{type,network},
     %%  {pid,<0.329.0>},
     %%  {name,<<"127.0.0.1:60998 -> 127.0.0.1:5672">>},
@@ -94,7 +94,7 @@ handle_event(#event{type = connection_created, props = Details}, State) ->
     %%        <<"http://rubybunny.info">>}]},
     %%  {connected_at,1453214290847}]
     {ok, State};
-handle_event(#event{type = connection_closed, props = Details}, State) ->
+handle_event(#event{type = connection_closed, props = _Details}, State) ->
     {ok, State};
 handle_event(_Event, State) ->
     {ok, State}.
