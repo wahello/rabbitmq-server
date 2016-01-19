@@ -52,6 +52,8 @@
 -rabbit_upgrade({queue_state,           mnesia, [down_slave_nodes]}).
 -rabbit_upgrade({recoverable_slaves,    mnesia, [queue_state]}).
 -rabbit_upgrade({user_password_hashing, mnesia, [hash_passwords]}).
+-rabbit_upgrade({vhost_limits,          mnesia, []}).
+-rabbit_upgrade({tracked_connection,    mnesia, []}).
 
 %% -------------------------------------------------------------------
 
@@ -86,10 +88,28 @@
 -spec(queue_state/0           :: () -> 'ok').
 -spec(recoverable_slaves/0    :: () -> 'ok').
 -spec(user_password_hashing/0 :: () -> 'ok').
+-spec(vhost_limits/0          :: () -> 'ok').
+-spec(tracked_connection/0    :: () -> 'ok').
 
 -endif.
 
 %%--------------------------------------------------------------------
+
+tracked_connection() ->
+    create(rabbit_tracked_connection, [{record_name, tracked_connection},
+                                       {attributes, [vhost, name, pid, peer_host,
+                                                     peer_port, connected_at]}]).
+
+%% replaces vhost.dummy (used to avoid having a single-field record
+%% which Mnesia doesn't like) with vhost.limits (which is actually
+%% used)
+vhost_limits() ->
+    transform(
+      rabbit_vhost,
+      fun ({vhost, VHost, _Dummy}) ->
+              {vhost, VHost, undefined}
+      end,
+      [virtual_host, limits]).
 
 %% It's a bad idea to use records or record_info here, even for the
 %% destination form. Because in the future, the destination form of

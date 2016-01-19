@@ -301,9 +301,19 @@ definitions() ->
      {rabbit_queue,
       [{record_name, amqqueue},
        {attributes, record_info(fields, amqqueue)},
-       {match, #amqqueue{name = queue_name_match(), _='_'}}]}]
-        ++ gm:table_definitions()
-        ++ mirrored_supervisor:table_definitions().
+       {match, #amqqueue{name = queue_name_match(), _='_'}}]},
+
+     %% Used to track connections across virtual hosts
+     %% e.g. so that limits can be enforced.
+     %%
+     %% All data in this table is transient.
+     {rabbit_tracked_connection,
+      [{record_name, tracked_connection},
+       {attributes, record_info(fields, tracked_connection)},
+       {match, #tracked_connection{_ = '_'}}]}
+
+    ] ++ gm:table_definitions()
+      ++ mirrored_supervisor:table_definitions().
 
 binding_match() ->
     #binding{source = exchange_name_match(),
