@@ -136,14 +136,21 @@
 
 %% used e.g. by rabbit_connection_tracking
 -type(tracked_connection() ::
-        #tracked_connection{vhost     :: vhost(),
-                            name      :: connection_name(),
-                            pid       :: pid(),
-                            protocol  :: protocol(),
-                            peer_host :: rabbit_networking:hostname(),
-                            peer_port :: rabbit_networking:ip_port()}).
+        #tracked_connection{id           :: {node(), connection_name()},
+                            node         :: node(),
+                            vhost        :: vhost(),
+                            name         :: connection_name(),
+                            pid          :: pid(),
+                            protocol     :: protocol_name(),
+                            peer_host    :: rabbit_networking:hostname(),
+                            peer_port    :: rabbit_networking:ip_port(),
+                            username     :: username(),
+                            connected_at :: integer()}).
 
+%% old AMQP 0-9-1-centric type, avoid when possible
 -type(protocol() :: rabbit_framing:protocol()).
+
+-type(protocol_name() :: 'amqp0_8' | 'amqp0_9_1' | 'amqp1_0' | 'mqtt' | 'stomp' | any()).
 
 -type(auth_user() ::
         #auth_user{username :: username(),
