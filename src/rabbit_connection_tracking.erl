@@ -100,7 +100,6 @@ tracked_connection_from_connection_created(EventDetails) ->
     %%  {connected_at,1453214290847}]
     Name = proplists:get_value(name, EventDetails),
     Node = proplists:get_value(node, EventDetails),
-    io:format("{Node, Name}: ~p~n", [{Node, Name}]),
     #tracked_connection{id           = {Node, Name},
                         name         = Name,
                         node         = Node,
