@@ -19,7 +19,7 @@
 -export([create/0, create_local_copy/1, wait_for_replicated/0, wait/1,
          force_load/0, is_present/0, is_empty/0, needs_default_data/0,
          check_schema_integrity/0, clear_ram_only_tables/0, wait_timeout/0,
-         ensure_secondary_indecies/0, ensure_secondary_indecies/2]).
+         ensure_secondary_indices/0, ensure_secondary_indices/2]).
 
 -include("rabbit.hrl").
 
@@ -55,7 +55,7 @@ create() ->
                                                  Tab, TabDef1, Reason}})
                           end
                   end, definitions()),
-    ok = rabbit_table:ensure_secondary_indecies(),
+    ok = rabbit_table:ensure_secondary_indices(),
     ok.
 
 %% The sequence in which we delete the schema and then the other
@@ -69,11 +69,11 @@ create_local_copy(ram)  ->
     create_local_copies(ram),
     create_local_copy(schema, ram_copies).
 
-ensure_secondary_indecies() ->
-    ensure_secondary_indecies(rabbit_tracked_connection, [vhost, username]),
+ensure_secondary_indices() ->
+    ensure_secondary_indices(rabbit_tracked_connection, [vhost, username]),
     ok.
 
-ensure_secondary_indecies(Tab, Fields) ->
+ensure_secondary_indices(Tab, Fields) ->
     [mnesia:add_table_index(Tab, Field) || Field <- Fields].
 
 wait_for_replicated() ->
