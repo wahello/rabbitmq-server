@@ -21,8 +21,11 @@
 -include("rabbit.hrl").
 
 -export([register/0]).
--export([parse_set/2]).
+-export([parse_set/2, clear/1]).
 -export([validate/5, notify/4, notify_clear/3]).
+-export([connection_limit/1]).
+
+-import(rabbit_misc, [pget/2]).
 
 -rabbit_boot_step({?MODULE,
                    [{description, "vhost limit parameters"},
@@ -47,6 +50,9 @@ notify_clear(VHost, <<"vhost-limits">>, <<"limits">>) ->
     rabbit_event:notify(vhost_limits_cleared, [{name, <<"limits">>}]),
     update_vhost(VHost, undefined).
 
+connection_limit(VirtualHost) ->
+    get_limit(VirtualHost, <<"max-connections">>).
+
 %%----------------------------------------------------------------------------
 
 parse_set(VHost, Defn) ->
@@ -61,6 +67,10 @@ set(VHost, Defn) ->
     rabbit_runtime_parameters:set_any(VHost, <<"vhost-limits">>,
                                       <<"limits">>, Defn, none).
 
+clear(VHost) ->
+    rabbit_runtime_parameters:clear_any(VHost, <<"vhost-limits">>,
+                                        <<"limits">>).
+
 vhost_limit_validation() ->
     [{<<"max-connections">>, fun rabbit_parameter_validation:number/2, mandatory}].
 
@@ -73,3 +83,16 @@ update_vhost(VHostName, Limits) ->
                                   end)
       end),
     ok.
+
+get_limit(VirtualHost, Limit) ->
+    case rabbit_runtime_parameters:list(VirtualHost, <<"vhost-limits">>) of
+        []      -> undefined;
+        [Param] -> case pget(value, Param) of
+                       undefined -> undefined;
+                       Val       -> case pget(Limit, Val) of
+                                        undefined     -> undefined;
+                                        N when N =< 0 -> undefined;
+                                        N when N > 0  -> {ok, N}
+                                    end
+                   end
+    end.

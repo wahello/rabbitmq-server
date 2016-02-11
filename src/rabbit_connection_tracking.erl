@@ -26,7 +26,8 @@
 %%  * rabbit_event
 
 -export([register_connection/1, unregister_connection/1,
-         tracked_connection_from_connection_created/1]).
+         tracked_connection_from_connection_created/1,
+         is_over_connection_limit/1, count_connections_in/1]).
 
 -ifdef(use_specs).
 
@@ -53,6 +54,26 @@ unregister_connection(ConnId = {_Node, _Name}) ->
     rabbit_misc:execute_mnesia_transaction(fun() ->
         mnesia:delete({?TABLE, ConnId})
     end).
+
+is_over_connection_limit(VirtualHost) ->
+    ConnectionCount = count_connections_in(VirtualHost),
+    case rabbit_vhost_limit:connection_limit(VirtualHost) of
+        undefined   -> false;
+        {ok, Limit} -> case ConnectionCount > Limit of
+                           false -> false;
+                           true  -> {true, Limit}
+                       end
+    end.
+
+count_connections_in(VirtualHost) ->
+    %% TODO: optimize
+    Xs = rabbit_misc:execute_mnesia_transaction(
+        fun() ->
+            mnesia:index_read(
+                rabbit_tracked_connection, VirtualHost,
+                #tracked_connection.vhost)
+        end),
+    length(Xs).
 
 %% Returns a #tracked_connection from connection_created
 %% event details.
