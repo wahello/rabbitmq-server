@@ -66,14 +66,9 @@ is_over_connection_limit(VirtualHost) ->
     end.
 
 count_connections_in(VirtualHost) ->
-    %% TODO: optimize
-    Xs = rabbit_misc:execute_mnesia_transaction(
-        fun() ->
-            mnesia:index_read(
-                rabbit_tracked_connection, VirtualHost,
-                #tracked_connection.vhost)
-        end),
-    length(Xs).
+    ets:select_count(?TABLE, [{#tracked_connection{vhost = '$1', _ = '_'},
+                              [{'=:=','$1', VirtualHost}],
+                              [true]}]).
 
 %% Returns a #tracked_connection from connection_created
 %% event details.
