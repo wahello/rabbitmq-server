@@ -54,42 +54,44 @@
 -rabbit_upgrade({user_password_hashing, mnesia, [hash_passwords]}).
 -rabbit_upgrade({vhost_limits,          mnesia, []}).
 -rabbit_upgrade({tracked_connection,    mnesia, [vhost_limits]}).
+-rabbit_upgrade({tracked_connection_per_vhost, mnesia, [tracked_connection]}).
 
 %% -------------------------------------------------------------------
 
 -ifdef(use_specs).
 
--spec(remove_user_scope/0     :: () -> 'ok').
--spec(hash_passwords/0        :: () -> 'ok').
--spec(add_ip_to_listener/0    :: () -> 'ok').
--spec(internal_exchanges/0    :: () -> 'ok').
--spec(user_to_internal_user/0 :: () -> 'ok').
--spec(topic_trie/0            :: () -> 'ok').
--spec(semi_durable_route/0    :: () -> 'ok').
--spec(exchange_event_serial/0 :: () -> 'ok').
--spec(trace_exchanges/0       :: () -> 'ok').
--spec(user_admin_to_tags/0    :: () -> 'ok').
--spec(ha_mirrors/0            :: () -> 'ok').
--spec(gm/0                    :: () -> 'ok').
--spec(exchange_scratch/0      :: () -> 'ok').
--spec(mirrored_supervisor/0   :: () -> 'ok').
--spec(topic_trie_node/0       :: () -> 'ok').
--spec(runtime_parameters/0    :: () -> 'ok').
--spec(policy/0                :: () -> 'ok').
--spec(sync_slave_pids/0       :: () -> 'ok').
--spec(no_mirror_nodes/0       :: () -> 'ok').
--spec(gm_pids/0               :: () -> 'ok').
--spec(exchange_decorators/0   :: () -> 'ok').
--spec(policy_apply_to/0       :: () -> 'ok').
--spec(queue_decorators/0      :: () -> 'ok').
--spec(internal_system_x/0     :: () -> 'ok').
--spec(cluster_name/0          :: () -> 'ok').
--spec(down_slave_nodes/0      :: () -> 'ok').
--spec(queue_state/0           :: () -> 'ok').
--spec(recoverable_slaves/0    :: () -> 'ok').
--spec(user_password_hashing/0 :: () -> 'ok').
--spec(vhost_limits/0          :: () -> 'ok').
--spec(tracked_connection/0    :: () -> 'ok').
+-spec(remove_user_scope/0            :: () -> 'ok').
+-spec(hash_passwords/0               :: () -> 'ok').
+-spec(add_ip_to_listener/0           :: () -> 'ok').
+-spec(internal_exchanges/0           :: () -> 'ok').
+-spec(user_to_internal_user/0        :: () -> 'ok').
+-spec(topic_trie/0                   :: () -> 'ok').
+-spec(semi_durable_route/0           :: () -> 'ok').
+-spec(exchange_event_serial/0        :: () -> 'ok').
+-spec(trace_exchanges/0              :: () -> 'ok').
+-spec(user_admin_to_tags/0           :: () -> 'ok').
+-spec(ha_mirrors/0                   :: () -> 'ok').
+-spec(gm/0                           :: () -> 'ok').
+-spec(exchange_scratch/0             :: () -> 'ok').
+-spec(mirrored_supervisor/0          :: () -> 'ok').
+-spec(topic_trie_node/0              :: () -> 'ok').
+-spec(runtime_parameters/0           :: () -> 'ok').
+-spec(policy/0                       :: () -> 'ok').
+-spec(sync_slave_pids/0              :: () -> 'ok').
+-spec(no_mirror_nodes/0              :: () -> 'ok').
+-spec(gm_pids/0                      :: () -> 'ok').
+-spec(exchange_decorators/0          :: () -> 'ok').
+-spec(policy_apply_to/0              :: () -> 'ok').
+-spec(queue_decorators/0             :: () -> 'ok').
+-spec(internal_system_x/0            :: () -> 'ok').
+-spec(cluster_name/0                 :: () -> 'ok').
+-spec(down_slave_nodes/0             :: () -> 'ok').
+-spec(queue_state/0                  :: () -> 'ok').
+-spec(recoverable_slaves/0           :: () -> 'ok').
+-spec(user_password_hashing/0        :: () -> 'ok').
+-spec(vhost_limits/0                 :: () -> 'ok').
+-spec(tracked_connection/0           :: () -> 'ok').
+-spec(tracked_connection_per_vhost/0 :: () -> 'ok').
 
 -endif.
 
@@ -100,8 +102,11 @@ tracked_connection() ->
                                        {attributes, [id, node, vhost, name,
                                                      pid, protocol,
                                                      peer_host, peer_port,
-                                                     username, connected_at]}],
-        [vhost, username]).
+                                                     username, connected_at]}]).
+
+tracked_connection_per_vhost() ->
+    create(tracked_connection_per_vhost, [{record_name, tracked_connection_per_vhost},
+                                          {attributes, [vhost, connection_count]}]).
 
 %% replaces vhost.dummy (used to avoid having a single-field record
 %% which Mnesia doesn't like) with vhost.limits (which is actually

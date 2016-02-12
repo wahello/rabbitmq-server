@@ -319,7 +319,12 @@ definitions() ->
      {rabbit_tracked_connection,
       [{record_name, tracked_connection},
        {attributes, record_info(fields, tracked_connection)},
-       {match, #tracked_connection{_ = '_'}}]}
+       {match, #tracked_connection{_ = '_'}}]},
+
+     {rabbit_tracked_connection_per_vhost,
+      [{record_name, tracked_connection_per_vhost},
+       {attributes, record_info(fields, tracked_connection_per_vhost)},
+       {match, #tracked_connection_per_vhost{_ = '_'}}]}
 
     ] ++ gm:table_definitions()
       ++ mirrored_supervisor:table_definitions().

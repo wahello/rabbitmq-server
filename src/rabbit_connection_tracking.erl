@@ -45,30 +45,63 @@
 %% API
 %%
 
-register_connection(Conn) ->
-    rabbit_misc:execute_mnesia_transaction(fun() ->
-        mnesia:write(?TABLE, Conn, write)
-    end).
+register_connection(#tracked_connection{vhost = VHost} = Conn) ->
+    rabbit_misc:execute_mnesia_transaction(
+      fun() ->
+              mnesia:write(?TABLE, Conn, write),
+              mnesia:dirty_update_counter(
+                rabbit_tracked_connection_per_vhost, VHost, 1),
+              ok
+      end).
 
 unregister_connection(ConnId = {_Node, _Name}) ->
-    rabbit_misc:execute_mnesia_transaction(fun() ->
-        mnesia:delete({?TABLE, ConnId})
-    end).
+    rabbit_misc:execute_mnesia_transaction(
+      fun() ->
+              case mnesia:dirty_read(?TABLE, ConnId) of
+                  []    -> ok;
+                  [Row] ->
+                      mnesia:dirty_update_counter(
+                        rabbit_tracked_connection_per_vhost,
+                        Row#tracked_connection.vhost, -1),
+                      mnesia:delete({?TABLE, ConnId})
+              end
+      end).
 
 is_over_connection_limit(VirtualHost) ->
     ConnectionCount = count_connections_in(VirtualHost),
     case rabbit_vhost_limit:connection_limit(VirtualHost) of
         undefined   -> false;
-        {ok, Limit} -> case ConnectionCount > Limit of
-                           false -> false;
-                           true  -> {true, Limit}
+        {ok, Limit} -> case {ConnectionCount, ConnectionCount >= Limit} of
+                           %% 0 = no limit
+                           {0, _}     -> false;
+                           %% the limit hasn't been reached
+                           {_, false} -> false;
+                           {_N, true} -> {true, Limit}
                        end
     end.
 
 count_connections_in(VirtualHost) ->
-    ets:select_count(?TABLE, [{#tracked_connection{vhost = '$1', _ = '_'},
-                              [{'=:=','$1', VirtualHost}],
-                              [true]}]).
+    try
+        case mnesia:transaction(
+               fun() ->
+                       case mnesia:dirty_read(
+                              {rabbit_tracked_connection_per_vhost,
+                               VirtualHost}) of
+                           []    -> 0;
+                           [Val] ->
+                               Val#tracked_connection_per_vhost.connection_count
+                       end
+               end) of
+            {atomic,  Val}     -> Val;
+            {aborted, _Reason} -> 0
+        end
+    catch
+        _:Err  ->
+            rabbit_log:error(
+              "Failed to fetch number of connections in vhost ~p:~n~p~n",
+              [VirtualHost, Err]),
+            0
+    end.
 
 %% Returns a #tracked_connection from connection_created
 %% event details.
