@@ -68,6 +68,16 @@ handle_event(#event{type = connection_closed, props = Details}, State) ->
         {proplists:get_value(node, Details),
          proplists:get_value(name, Details)}),
     {ok, State};
+handle_event(#event{type = vhost_deleted, props = Details}, State) ->
+    VHost = proplists:get_value(name, Details),
+    %% TODO: force close and unregister connections in
+    %%       this vhost. Moved to rabbitmq/rabbitmq-server#627.
+    {ok, State};
+handle_event(#event{type = user_deleted, props = Details}, State) ->
+    Username = proplists:get_value(name, Details),
+    %% TODO: force close and unregister connections from
+    %%       this user. Moved to rabbitmq/rabbitmq-server#628.
+    {ok, State};
 handle_event(_Event, State) ->
     {ok, State}.
 
