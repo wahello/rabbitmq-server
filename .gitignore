@@ -6,11 +6,14 @@
 cover/
 debug/
 deps/
+debug/
 doc/
 ebin/
 etc/
 logs/
 plugins/
+
+PACKAGES/
 
 rabbit.d
 
@@ -43,3 +46,5 @@ rabbitmq-server-*.zip
 # Tracing tools
 *-ttb
 *.ti
+
+PACKAGES/*

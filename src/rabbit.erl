@@ -272,6 +272,7 @@ start() ->
 
 boot() ->
     start_it(fun() ->
+                     ensure_config(),
                      ok = ensure_application_loaded(),
                      HipeResult = rabbit_hipe:maybe_hipe_compile(),
                      ok = start_logger(),
@@ -285,19 +286,137 @@ boot() ->
                      broker_start()
              end).
 
+ensure_config() ->
+    case rabbit_config:prepare_and_use_config() of
+        {error, Reason} ->
+            {Format, Arg} = case Reason of
+                {generation_error, Error} -> {"~s", [Error]};
+                Other                     -> {"~p", [Other]}
+            end,
+            log_boot_error_and_exit(generate_config_file,
+                                    "~nConfig file generation failed "++Format,
+                                    Arg);
+        ok -> ok
+    end.
+
+
 broker_start() ->
     Plugins = rabbit_plugins:setup(),
     ToBeLoaded = Plugins ++ ?APPS,
     start_apps(ToBeLoaded),
-    case os:type() of
-        {win32, _} -> ok;
-        _ ->
-            %% Only for systemd unit with Type=notify. Errors are intentionally
-            %% ignored: either you have working systemd-notify(1) or you don't
-            %% care about systemd at all.
-            os:cmd("systemd-notify --ready")
-    end,
+    maybe_sd_notify(),
     ok = log_broker_started(rabbit_plugins:active()).
+
+%% Try to send systemd ready notification if it makes sense in the
+%% current environment. standard_error is used intentionally in all
+%% logging statements, so all this messages will end in systemd
+%% journal.
+maybe_sd_notify() ->
+    case sd_notify_ready() of
+        false ->
+            io:format(standard_error, "systemd READY notification failed, beware of timeouts~n", []);
+        _ ->
+            ok
+    end.
+
+sd_notify_ready() ->
+    case {os:type(), os:getenv("NOTIFY_SOCKET")} of
+        {{win32, _}, _} ->
+            true;
+        {_, [_|_]} -> %% Non-empty NOTIFY_SOCKET, give it a try
+            sd_notify_legacy() orelse sd_notify_socat();
+        _ ->
+            true
+    end.
+
+sd_notify_data() ->
+    "READY=1\nSTATUS=Initialized\nMAINPID=" ++ os:getpid() ++ "\n".
+
+sd_notify_legacy() ->
+    case code:load_file(sd_notify) of
+        {module, sd_notify} ->
+            SDNotify = sd_notify,
+            SDNotify:sd_notify(0, sd_notify_data()),
+            true;
+        {error, _} ->
+            false
+    end.
+
+%% socat(1) is the most portable way the sd_notify could be
+%% implemented in erlang, without introducing some NIF. Currently the
+%% following issues prevent us from implementing it in a more
+%% reasonable way:
+%% - systemd-notify(1) is unstable for non-root users
+%% - erlang doesn't support unix domain sockets.
+%%
+%% Some details on how we ended with such a solution:
+%%   https://github.com/rabbitmq/rabbitmq-server/issues/664
+sd_notify_socat() ->
+    case sd_current_unit() of
+        {ok, Unit} ->
+            io:format(standard_error, "systemd unit for activation check: \"~s\"~n", [Unit]),
+            sd_notify_socat(Unit);
+        _ ->
+            false
+    end.
+
+socat_socket_arg("@" ++ AbstractUnixSocket) ->
+    "abstract-sendto:" ++ AbstractUnixSocket;
+socat_socket_arg(UnixSocket) ->
+    "unix-sendto:" ++ UnixSocket.
+
+sd_open_port() ->
+    open_port(
+      {spawn_executable, os:find_executable("socat")},
+      [{args, [socat_socket_arg(os:getenv("NOTIFY_SOCKET")), "STDIO"]},
+       use_stdio, out]).
+
+sd_notify_socat(Unit) ->
+    case sd_open_port() of
+        {'EXIT', Exit} ->
+            io:format(standard_error, "Failed to start socat ~p~n", [Exit]),
+            false;
+        Port ->
+            Port ! {self(), {command, sd_notify_data()}},
+            Result = sd_wait_activation(Port, Unit),
+            port_close(Port),
+            Result
+    end.
+
+sd_current_unit() ->
+    case catch re:run(os:cmd("systemctl status " ++ os:getpid()), "([-.@0-9a-zA-Z]+)", [unicode, {capture, all_but_first, list}]) of
+        {'EXIT', _} ->
+            error;
+        {match, [Unit]} ->
+            {ok, Unit};
+        _ ->
+            error
+    end.
+
+sd_wait_activation(Port, Unit) ->
+    case os:find_executable("systemctl") of
+        false ->
+            io:format(standard_error, "'systemctl' unavailable, falling back to sleep~n", []),
+            timer:sleep(5000),
+            true;
+        _ ->
+            sd_wait_activation(Port, Unit, 10)
+    end.
+
+sd_wait_activation(_, _, 0) ->
+    io:format(standard_error, "Service still in 'activating' state, bailing out~n", []),
+    false;
+sd_wait_activation(Port, Unit, AttemptsLeft) ->
+    case os:cmd("systemctl show --property=ActiveState " ++ Unit) of
+        "ActiveState=activating\n" ->
+            timer:sleep(1000),
+            sd_wait_activation(Port, Unit, AttemptsLeft - 1);
+        "ActiveState=" ++ _ ->
+            true;
+        _ = Err->
+            io:format(standard_error, "Unexpected status from systemd ~p~n", [Err]),
+            false
+    end.
 
 start_it(StartFun) ->
     Marker = spawn_link(fun() -> receive stop -> ok end end),
@@ -335,6 +454,10 @@ stop_and_halt() ->
         stop()
     after
         rabbit_log:info("Halting Erlang VM~n", []),
+        %% Also duplicate this information to stderr, so console where
+        %% foreground broker was running (or systemd journal) will
+        %% contain information about graceful termination.
+        io:format(standard_error, "Gracefully halting Erlang VM~n", []),
         init:stop()
     end,
     ok.
@@ -643,7 +766,8 @@ print_banner() ->
               "~n  ######  ##"
               "~n  ##########  Logs: ~s" ++
               LogFmt ++
-              "~n~n              Starting broker...",
+              "~n~n              Starting broker..."
+              "~n",
               [Product, Version, ?COPYRIGHT_MESSAGE, ?INFORMATION_MESSAGE] ++
               LogLocations).
 
@@ -678,11 +802,16 @@ log_banner() ->
     rabbit_log:info("~n~s", [Banner]).
 
 warn_if_kernel_config_dubious() ->
-    case erlang:system_info(kernel_poll) of
-        true  -> ok;
-        false -> rabbit_log:warning(
-                   "Kernel poll (epoll, kqueue, etc) is disabled. Throughput "
-                   "and CPU utilization may worsen.~n")
+    case os:type() of
+        {win32, _} ->
+            ok;
+        _ ->
+            case erlang:system_info(kernel_poll) of
+                true  -> ok;
+                false -> rabbit_log:warning(
+                           "Kernel poll (epoll, kqueue, etc) is disabled. Throughput "
+                           "and CPU utilization may worsen.~n")
+            end
     end,
     AsyncThreads = erlang:system_info(thread_pool_size),
     case AsyncThreads < ?ASYNC_THREADS_WARNING_THRESHOLD of
@@ -788,32 +917,7 @@ home_dir() ->
     end.
 
 config_files() ->
-    Abs = fun (F) ->
-                  filename:absname(filename:rootname(F, ".config") ++ ".config")
-          end,
-    case init:get_argument(config) of
-        {ok, Files} -> [Abs(File) || [File] <- Files];
-        error       -> case config_setting() of
-                           none -> [];
-                           File -> [Abs(File) ++ " (not found)"]
-                       end
-    end.
-
-%% This is a pain. We want to know where the config file is. But we
-%% can't specify it on the command line if it is missing or the VM
-%% will fail to start, so we need to find it by some mechanism other
-%% than init:get_arguments/0. We can look at the environment variable
-%% which is responsible for setting it... but that doesn't work for a
-%% Windows service since the variable can change and the service not
-%% be reinstalled, so in that case we add a magic application env.
-config_setting() ->
-    case application:get_env(rabbit, windows_service_config) of
-        {ok, File1} -> File1;
-        undefined   -> case os:getenv("RABBITMQ_CONFIG_FILE") of
-                           false -> none;
-                           File2 -> File2
-                       end
-    end.
+    rabbit_config:config_files().
 
 %% We don't want this in fhc since it references rabbit stuff. And we can't put
 %% this in the bootstep directly.

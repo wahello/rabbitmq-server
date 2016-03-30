@@ -18,16 +18,18 @@
 -include("rabbit_cli.hrl").
 
 -export([main/3, start_distribution/0, start_distribution/1,
-         parse_arguments/4, rpc_call/4, rpc_call/5, rpc_call/7]).
+         parse_arguments/4, filter_opts/2,
+         rpc_call/4, rpc_call/5, rpc_call/7]).
 
 %%----------------------------------------------------------------------------
 
 -ifdef(use_specs).
 
+-type(option_name() :: string()).
+-type(option_value() :: string() | node() | boolean()).
 -type(optdef() :: flag | {option, string()}).
--type(parse_result() :: {'ok', {atom(), [{string(), string()}], [string()]}} |
+-type(parse_result() :: {'ok', {atom(), [{option_name(), option_value()}], [string()]}} |
                         'no_command').
-
 
 -spec(main/3 :: (fun (([string()], string()) -> parse_result()),
                      fun ((atom(), atom(), [any()], [any()]) -> any()),
@@ -38,6 +40,9 @@
 -spec(parse_arguments/4 ::
         ([{atom(), [{string(), optdef()}]} | atom()],
          [{string(), optdef()}], string(), [string()]) -> parse_result()).
+
+-spec(filter_opts/2 :: ([{option_name(), option_value()}], [option_name()]) -> [boolean()]).
+
 -spec(rpc_call/4 :: (node(), atom(), atom(), [any()]) -> any()).
 -spec(rpc_call/5 :: (node(), atom(), atom(), [any()], number()) -> any()).
 -spec(rpc_call/7 :: (node(), atom(), atom(), [any()], reference(), pid(),
@@ -117,7 +122,10 @@ main(ParseFun, DoFun, UsageMod) ->
                 _ ->
                     print_error("unable to connect to node ~w: ~w", [Node, Reason]),
                     print_badrpc_diagnostics([Node]),
-                    rabbit_misc:quit(?EX_UNAVAILABLE)
+                    case Command of
+                        stop -> rabbit_misc:quit(?EX_OK);
+                        _    -> rabbit_misc:quit(?EX_UNAVAILABLE)
+                    end
             end;
         {badrpc_multi, Reason, Nodes} ->
             print_error("unable to connect to nodes ~p: ~w", [Nodes, Reason]),
@@ -241,6 +249,22 @@ process_opts(Defs, C, [A | As], Found, KVs, Outs) ->
         {none, _, _}     -> no_command
     end.
 
+%% When we have a set of flags that are used for filtering, we want by
+%% default to include every such option in our output. But if a user
+%% explicitly specified any such flag, we want to include only items
+%% which he has requested.
+filter_opts(CurrentOptionValues, AllOptionNames) ->
+    Explicit = lists:map(fun(OptName) ->
+                                 proplists:get_bool(OptName, CurrentOptionValues)
+                         end,
+                         AllOptionNames),
+    case lists:member(true, Explicit) of
+        true ->
+            Explicit;
+        false ->
+            lists:duplicate(length(AllOptionNames), true)
+    end.
+
 %%----------------------------------------------------------------------------
 
 fmt_stderr(Format, Args) -> rabbit_misc:format_stderr(Format ++ "~n", Args).
@@ -255,14 +279,10 @@ print_badrpc_diagnostics(Nodes) ->
 %% a timeout unless we set our ticktime to be the same. So let's do
 %% that.
 rpc_call(Node, Mod, Fun, Args) ->
-    rpc_call(Node, Mod, Fun, Args, ?RPC_TIMEOUT).
+    rabbit_misc:rpc_call(Node, Mod, Fun, Args).
 
 rpc_call(Node, Mod, Fun, Args, Timeout) ->
-    case rpc:call(Node, net_kernel, get_net_ticktime, [], Timeout) of
-        {badrpc, _} = E -> E;
-        Time            -> net_kernel:set_net_ticktime(Time, 0),
-                           rpc:call(Node, Mod, Fun, Args, Timeout)
-    end.
+    rabbit_misc:rpc_call(Node, Mod, Fun, Args, Timeout).
 
 rpc_call(Node, Mod, Fun, Args, Ref, Pid, Timeout) ->
-    rpc_call(Node, Mod, Fun, Args++[Ref, Pid], Timeout).
+    rabbit_misc:rpc_call(Node, Mod, Fun, Args, Ref, Pid, Timeout).

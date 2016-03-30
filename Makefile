@@ -129,7 +129,8 @@ $(TARGETS_IN_RABBITMQ_TEST): $(ERLANG_MK_RECURSIVE_TEST_DEPS_LIST) \
 	    grep -E '^xmlto version 0\.0\.([0-9]|1[1-8])$$' >/dev/null || \
 	    opt='--stringparam man.indent.verbatims=0' ; \
 	xsltproc --novalid $(DOCS_DIR)/examples-to-end.xsl $< > $<.tmp && \
-	(xmlto -o $(DOCS_DIR) $$opt man $< 2>&1 | (grep -qv '^Note: Writing' || :)) && \
+	xmlto -vv -o $(DOCS_DIR) $$opt man $< 2>&1 | (grep -v '^Note: Writing' || :) && \
+	test -f $@ && \
 	rm $<.tmp
 
 # Use tmp files rather than a pipeline so that we get meaningful errors
@@ -336,7 +337,8 @@ SCRIPTS = rabbitmq-defaults \
 	  rabbitmq-env \
 	  rabbitmq-server \
 	  rabbitmqctl \
-	  rabbitmq-plugins
+	  rabbitmq-plugins \
+	  cuttlefish
 
 WINDOWS_SCRIPTS = rabbitmq-defaults.bat \
 		  rabbitmq-echopid.bat \
@@ -344,7 +346,8 @@ WINDOWS_SCRIPTS = rabbitmq-defaults.bat \
 		  rabbitmq-plugins.bat \
 		  rabbitmq-server.bat \
 		  rabbitmq-service.bat \
-		  rabbitmqctl.bat
+		  rabbitmqctl.bat \
+		  cuttlefish
 
 UNIX_TO_DOS ?= todos
 
@@ -355,7 +358,7 @@ install: install-erlapp install-scripts
 
 install-erlapp: dist
 	$(verbose) mkdir -p $(DESTDIR)$(RMQ_ERLAPP_DIR)
-	$(inst_verbose) cp -r include ebin plugins LICENSE* INSTALL \
+	$(inst_verbose) cp -r include ebin plugins priv LICENSE* INSTALL \
 		$(DESTDIR)$(RMQ_ERLAPP_DIR)
 	$(verbose) echo "Put your EZs here and use rabbitmq-plugins to enable them." \
 		> $(DESTDIR)$(RMQ_ERLAPP_DIR)/plugins/README
@@ -385,18 +388,18 @@ install-man: manpages
 	$(inst_verbose) sections=$$(ls -1 docs/*.[1-9] \
 		| sed -E 's/.*\.([1-9])$$/\1/' | uniq | sort); \
 	for section in $$sections; do \
-                mkdir -p $(DESTDIR)$(MANDIR)/man$$section; \
-                for manpage in $(DOCS_DIR)/*.$$section; do \
-                        gzip < $$manpage \
+		mkdir -p $(DESTDIR)$(MANDIR)/man$$section; \
+		for manpage in $(DOCS_DIR)/*.$$section; do \
+			gzip < $$manpage \
 			 > $(DESTDIR)$(MANDIR)/man$$section/$$(basename $$manpage).gz; \
-                done; \
-        done
+		done; \
+	done
 
 install-windows: install-windows-erlapp install-windows-scripts install-windows-docs
 
 install-windows-erlapp: dist
 	$(verbose) mkdir -p $(DESTDIR)$(WINDOWS_PREFIX)
-	$(inst_verbose) cp -r include ebin plugins LICENSE* INSTALL \
+	$(inst_verbose) cp -r include ebin plugins priv LICENSE* INSTALL \
 		$(DESTDIR)$(WINDOWS_PREFIX)
 	$(verbose) echo "Put your EZs here and use rabbitmq-plugins.bat to enable them." \
 		> $(DESTDIR)$(WINDOWS_PREFIX)/plugins/README.txt
@@ -449,3 +452,4 @@ package-rpm-suse package-windows package-standalone-macosx \
 package-generic-unix: $(PACKAGES_SOURCE_DIST_FILE)
 	$(verbose) $(MAKE) -C packaging $@ \
 		SOURCE_DIST_FILE=$(abspath $(PACKAGES_SOURCE_DIST_FILE))
+

@@ -21,6 +21,7 @@ rem Preserve values that might contain exclamation marks before
 rem enabling delayed expansion
 set TDP0=%~dp0
 set STAR=%*
+set CONF_SCRIPT_DIR="%~dp0"
 setlocal enabledelayedexpansion
 
 REM Get default settings with user overrides for (RABBITMQ_)<var_name>
@@ -41,11 +42,16 @@ if not exist "!ERLANG_HOME!\bin\erl.exe" (
 
 set RABBITMQ_EBIN_ROOT=!RABBITMQ_HOME!\ebin
 
+set RABBITMQ_CONFIG_FILE="!RABBITMQ_CONFIG_FILE!"
+
 "!ERLANG_HOME!\bin\erl.exe" ^
         -pa "!RABBITMQ_EBIN_ROOT!" ^
         -noinput -hidden ^
         -s rabbit_prelaunch ^
         !RABBITMQ_NAME_TYPE! rabbitmqprelaunch!RANDOM!!TIME:~9! ^
+        -conf_advanced "!RABBITMQ_ADVANCED_CONFIG_FILE!"  ^
+        -rabbit enabled_plugins_file "!RABBITMQ_ENABLED_PLUGINS_FILE!" ^
+        -rabbit plugins_dir "!$RABBITMQ_PLUGINS_DIR!" ^
         -extra "!RABBITMQ_NODENAME!"
 
 if ERRORLEVEL 2 (
@@ -56,13 +62,25 @@ if ERRORLEVEL 2 (
     set RABBITMQ_DIST_ARG=-kernel inet_dist_listen_min !RABBITMQ_DIST_PORT! -kernel inet_dist_listen_max !RABBITMQ_DIST_PORT!
 )
 
+if not exist "!RABBITMQ_SCHEMA_DIR!\rabbitmq.schema" (
+    copy "!RABBITMQ_HOME!\priv\schema\rabbitmq.schema" "!RABBITMQ_SCHEMA_DIR!\rabbitmq.schema"
+)
+
 set RABBITMQ_EBIN_PATH="-pa !RABBITMQ_EBIN_ROOT!"
 
 if exist "!RABBITMQ_CONFIG_FILE!.config" (
     set RABBITMQ_CONFIG_ARG=-config "!RABBITMQ_CONFIG_FILE!"
-) else (
-    set RABBITMQ_CONFIG_ARG=
-)
+) else if exist "!RABBITMQ_CONFIG_FILE!.conf" (
+    set RABBITMQ_CONFIG_ARG=-conf "!RABBITMQ_CONFIG_FILE!" ^
+                            -conf_dir !RABBITMQ_GENERATED_CONFIG_DIR! ^
+                            -conf_script_dir !CONF_SCRIPT_DIR:\=/! ^
+                            -conf_schema_dir !RABBITMQ_SCHEMA_DIR!
+    if exist "!RABBITMQ_ADVANCED_CONFIG_FILE!.config" (
+        set RABBITMQ_CONFIG_ARG=!RABBITMQ_CONFIG_ARG! ^
+                                -conf_advanced "!RABBITMQ_ADVANCED_CONFIG_FILE!" ^
+                                -config "!RABBITMQ_ADVANCED_CONFIG_FILE!"
+    )
+) 
 
 set RABBITMQ_LISTEN_ARG=
 if not "!RABBITMQ_NODE_IP_ADDRESS!"=="" (
@@ -91,7 +109,18 @@ if "!RABBITMQ_NODE_ONLY!"=="" (
 )
 
 if "!RABBITMQ_IO_THREAD_POOL_SIZE!"=="" (
-    set RABBITMQ_IO_THREAD_POOL_ARG=30
+    set RABBITMQ_IO_THREAD_POOL_SIZE=64
+) 
+
+
+set ENV_OK=true
+CALL :check_not_empty "RABBITMQ_BOOT_MODULE" !RABBITMQ_BOOT_MODULE! 
+CALL :check_not_empty "RABBITMQ_NAME_TYPE" !RABBITMQ_NAME_TYPE!
+CALL :check_not_empty "RABBITMQ_NODENAME" !RABBITMQ_NODENAME!
+
+
+if "!ENV_OK!"=="false" (
+    EXIT /b 78
 )
 
 "!ERLANG_HOME!\bin\erl.exe" ^
@@ -122,5 +151,16 @@ if "!RABBITMQ_IO_THREAD_POOL_SIZE!"=="" (
 !RABBITMQ_DIST_ARG! ^
 !STAR!
 
+EXIT /B 0
+
+:check_not_empty
+if "%~2"=="" (
+    ECHO "Error: ENV variable should be defined: %1. Please check rabbitmq-env and rabbitmq-defaults, and !RABBITMQ_CONF_ENV_FILE! script files. Check also your Environment Variables settings"
+    set ENV_OK=false
+    EXIT /B 78 
+    )
+EXIT /B 0
+
 endlocal
 endlocal
+
